@@ -8,8 +8,7 @@
             [cheshire.core :as cheshire]
             [clojure.java.io :as io]
             [puget.printer :as puget]
-            [clojure.core.async :as async])
-  )
+            [clojure.core.async :as async]))
 
 (def client-name "bgpbeat")
 
@@ -130,7 +129,6 @@
       (catch Exception e
         (log :error "Exception during bulk indexing")
         (.printStackTrace e)))))
-
 
 
 (defn create-es-client []
