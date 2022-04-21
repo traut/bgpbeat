@@ -27,7 +27,9 @@
 
 (def messages-chan-max-time-secs 60)
 
-(def es-submitter-workers-num (or (System/getenv "ES_WORKERS_NUM") 5))
+(def es-submitter-workers-num (let [env-val (System/getenv "ES_WORKERS_NUM")]
+                                (if (string? env-val) (Integer/parseInt env-val) 5)))
+
 (def es-batch-size 1000)
 
 
