@@ -27,7 +27,7 @@
 
 (def messages-chan-max-time-secs 60)
 
-(def es-submitter-workers-num 5)
+(def es-submitter-workers-num (or (System/getenv "ES_WORKERS_NUM") 5))
 (def es-batch-size 1000)
 
 
