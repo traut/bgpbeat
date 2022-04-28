@@ -6,7 +6,7 @@
   :dependencies [[org.clojure/clojure "1.10.3"]
                  [mvxcvi/puget "1.3.2"]
                  [stylefruits/gniazdo "1.2.0"]
-                 [elastic/elasticsearch-clojure "7.1.0"]]
+                 [elastic/elasticsearch-clojure "8.0.0"]]
   :main ^:skip-aot bgpbeat.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot [bgpbeat.core]
