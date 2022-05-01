@@ -17,5 +17,3 @@
         subscribe-me {:type "ris_subscribe" :data {:type "UPDATE"}}]
     (utils/log :info "Sending subscription message" :msg subscribe-me)
     (ws/send-msg socket (cheshire/generate-string subscribe-me))))
-
-

@@ -2,6 +2,8 @@
   (:gen-class)
   (:require [elasticsearch.document :as doc]
             [elasticsearch.connection.http :as conn]
+            [clojure.core.async :as async]
+
             [bgpbeat.utils :as utils]))
 
 
@@ -41,3 +43,19 @@
          (map do-bulk)
          (doall))))
 
+
+(defn submit-batches [batches-chan es-client es-index workers-num log-step]
+  (let [counter (atom 0)
+        process-batch (fn [messages]
+                        (index-batch es-client es-index messages)
+                        (swap! counter + (count messages))
+                        (when (zero? (mod @counter log-step))
+                          (utils/log :info "Elements processed"
+                                     :count @counter
+                                     :batches-chan-size (utils/chan-size batches-chan))))]
+    (dotimes [worker-id workers-num]
+      (utils/log :info (format "Start ES bulk index worker %s" worker-id))
+      (async/go-loop
+        []
+        (process-batch (async/<! batches-chan))
+        (recur)))))

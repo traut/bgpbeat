@@ -13,10 +13,11 @@
 (def es-index (System/getenv "ES_INDEX"))
 (def es-username (System/getenv "ES_AUTH_USERNAME"))
 (def es-password (System/getenv "ES_AUTH_PASSWORD"))
-(def es-submitter-workers-num (utils/read-int-env-var "ES_WORKERS_NUM" 5))
+(def es-submitter-workers-num (utils/read-int-env-var "ES_WORKERS_NUM" 10))
 
-(def messages-chan (async/chan (async/sliding-buffer 5000)))
-(def batches-chan (async/chan (async/sliding-buffer 100)))
+(def messages-chan (async/chan (async/sliding-buffer 2000)))
+(def flatten-messages-chan (async/chan (async/sliding-buffer 10000)))
+(def batches-chan (async/chan (async/sliding-buffer 500)))
 
 (def messages-chan-max-time-secs 60)
 
@@ -36,20 +37,11 @@
     message))
 
 
-(defn remove-raw [message]
-  (dissoc message :raw))
-
-
 (defn unpack-communities [message]
   (let [community-pairs (:community message)
         communities (mapv (fn [[asn value]] {:asn asn :value value})
                           community-pairs)]
     (assoc message :community communities)))
-
-
-(defn message-log-trace [message]
-  (utils/log :trace "Processing message" :msg message)
-  message)
 
 
 (defn transform-message
@@ -60,7 +52,7 @@
         :data
         set-at-timestamp-field
         set-path-str
-        remove-raw
+        (dissoc :raw)  ; remove "raw" field that we have no use for
         unpack-communities)
     (catch Exception e
       (utils/log :error "Exception while transforming the message"
@@ -69,32 +61,70 @@
       message)))
 
 
+(defn flatten-announcements [message]
+  (let [announcements (:announcements message)]
+    (when announcements
+      (apply concat (mapv (fn [announcement]
+                            (mapv (fn [prefix]
+                                    (-> message
+                                        (assoc :prefix prefix
+                                               :update-type :announcement
+                                               :next-hop (:next_hop announcement))
+                                        (dissoc :announcements)))
+                                  (:prefixes announcement)))
+                          announcements)))))
+
+
+(defn flatten-withdrawals [message]
+  (let [withdrawals (:withdrawals message)]
+    (when withdrawals
+      (mapv #(-> message
+                 (assoc :prefix %
+                        :update-type :withdrawal)
+                 (dissoc :withdrawals))
+            withdrawals))))
+
+
+(defn flatten-update-message [message]
+  (concat (flatten-announcements message)
+          (flatten-withdrawals message)))
+
+
+(defn flatten-messages-connector [chan-in chan-out]
+  (async/go-loop
+    []
+    (mapv #(async/>!! chan-out %)
+          (flatten-update-message (async/<! chan-in)))
+    (recur)))
+
+
 (defn consume-messages-from-ws
   "Read messages from RIS WebSocket stream and bulk-index them into ES index"
   [& {:keys [max-time-secs batch-size]
       :or {max-time-secs messages-chan-max-time-secs
            batch-size es-batch-size}}]
+
   (let [es-client (es/create-es-client es-url es-username es-password)
-        counter (atom 0)
         max-time-msecs (* max-time-secs 1000)]
 
-    (utils/batch messages-chan batches-chan max-time-msecs batch-size)
-    (ris-ws/read-ws-stream #(async/>!! messages-chan %))
-    (let [process-batch (fn [messages-batch]
-                          (let [messages (mapv transform-message messages-batch)]
-                            (es/index-batch es-client es-index messages)
-                            (swap! counter + (count messages))
-                            (when (zero? (mod @counter element-processed-log-step))
-                              (utils/log :info "Elements processed"
-                                         :count @counter
-                                         :messages-chan-size (utils/chan-size messages-chan)
-                                         :batches-chan-size (utils/chan-size batches-chan)))))]
-      (dotimes [submitter es-submitter-workers-num]
-        (utils/log :info (format "Start ES bulk submitter %s" submitter))
-        (async/go-loop
-          []
-          (process-batch (async/<! batches-chan))
-          (recur))))))
+    ; flatten BGP update messages into one message per announcement / withdrawal
+    (flatten-messages-connector messages-chan flatten-messages-chan)
+
+    ; pack messages from `flatten-messages-chan` into batches in `batches-chan`
+    (utils/batch flatten-messages-chan
+                 batches-chan
+                 max-time-msecs
+                 batch-size)
+
+    ; pack batches from `batches-chan` into actions and submit them to ES
+    (es/submit-batches batches-chan
+                       es-client
+                       es-index
+                       es-submitter-workers-num
+                       element-processed-log-step))
+
+    ; open the flood gates
+    (ris-ws/read-ws-stream #(async/>!! messages-chan (transform-message %))))
 
 
 (defn consume-messages-from-http
