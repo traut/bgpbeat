@@ -104,8 +104,7 @@
       :or {max-time-secs messages-chan-max-time-secs
            batch-size es-batch-size}}]
 
-  (let [es-client (es/create-es-client es-url es-username es-password)
-        max-time-msecs (* max-time-secs 1000)]
+  (let [es-client (es/create-es-client es-url es-username es-password)]
 
     ; flatten BGP update messages into one message per announcement / withdrawal
     (flatten-messages-connector messages-chan flatten-messages-chan)
@@ -113,7 +112,7 @@
     ; pack messages from `flatten-messages-chan` into batches in `batches-chan`
     (utils/batch flatten-messages-chan
                  batches-chan
-                 max-time-msecs
+                 max-time-secs
                  batch-size)
 
     ; pack batches from `batches-chan` into actions and submit them to ES

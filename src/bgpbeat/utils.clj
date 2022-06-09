@@ -21,21 +21,37 @@
   (.count (.buf chan)))
 
 
+(defn log [level msg & {:as opts}]
+  (let [levels [:trace :debug :info :warning :error]]
+    (when (>= (.indexOf levels level)
+              (.indexOf levels logging-level))
+      (println
+        (str (java.time.LocalDateTime/now))
+        (s/upper-case (name level))
+        msg
+        (if opts
+          (puget/cprint-str opts)
+          "")))))
+
+
 (defn batch
   "Fetch messages from `chan-in` channel, collect them in batches
   of size `batch-size` or smaller if `max-time-msec` milliseconds passed,
   and push into `chan-out` channel."
-  [chan-in chan-out max-time-msec batch-size]
-  (let [counter (dec batch-size)]
+  [chan-in chan-out max-time-secs batch-size]
+  (let [counter (dec batch-size)
+        max-time-msecs (* max-time-secs 1000)]
     (async/go-loop
       [buffer []
-       timer (async/timeout max-time-msec)]
+       timer (async/timeout max-time-msecs)]
       (let [[v p] (async/alts! [chan-in timer])]
         (cond
           (= p timer)
           (do
-            (async/>! chan-out buffer)
-            (recur [] (async/timeout max-time-msec)))
+            (if (seq buffer)
+              (async/>! chan-out buffer)
+              (log :debug "Empty buffer when a timeout reached" :max-time-secs max-time-secs))
+            (recur [] (async/timeout max-time-msecs)))
 
           (nil? v)
           (when (seq buffer)
@@ -44,23 +60,10 @@
           (== (count buffer) counter)
           (do
             (async/>! chan-out (conj buffer v))
-            (recur [] (async/timeout max-time-msec)))
+            (recur [] (async/timeout max-time-msecs)))
 
           :else
           (recur (conj buffer v) timer))))))
-
-
-(defn log [level msg & {:as opts}]
-  (let [levels [:trace :debug :info :warning :error]]
-    (when (>= (.indexOf levels level)
-              (.indexOf levels logging-level))
-      (println 
-        (str (java.time.LocalDateTime/now))
-        (s/upper-case (name level))
-        msg
-        (if opts
-          (puget/cprint-str opts)
-          "")))))
 
 
 (defn read-int-env-var [env-var-name default-value]
