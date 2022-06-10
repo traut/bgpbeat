@@ -1,29 +1,30 @@
 # bgpbeat
 
-Streaming live BGP updates from RIPE NCC RIS collectors into ES cluster.
+Streaming [live BGP updates](https://ris-live.ripe.net/) from RIPE NCC RIS collectors into your ES cluster.
 
 ## Usage
 
 To run:
-
-    $ ES_URL='https://<ES-ENDPOINT>:9243' \
-        ES_AUTH_USERNAME=<USERNAME> \
-        ES_AUTH_PASSWORD=<PASSWORD> \
-        ES_INDEX=<DATA-STREAM-NAME> \
-        lein run
-
+```bash
+$ ES_URL='https://<ES-ENDPOINT>:9243' \
+    ES_AUTH_USERNAME=<USERNAME> \
+    ES_AUTH_PASSWORD=<PASSWORD> \
+    ES_INDEX=<DATA-STREAM-NAME> \
+    lein run
+```
 
 To build uberjar, run `build.sh` or `lein uberjar`. With the jar execution command is
-
-    $ ES_URL='https://<ES-ENDPOINT>:9243' \
-        ES_AUTH_USERNAME=<USERNAME> \
-        ES_AUTH_PASSWORD=<PASSWORD> \
-        ES_INDEX=<DATA-STREAM-NAME> \
-        java -jar bgpbeat-0.1.0-SNAPSHOT-standalone.jar [args]
+```bash
+$ ES_URL='https://<ES-ENDPOINT>:9243' \
+    ES_AUTH_USERNAME=<USERNAME> \
+    ES_AUTH_PASSWORD=<PASSWORD> \
+    ES_INDEX=<DATA-STREAM-NAME> \
+    java -jar bgpbeat-0.1.0-SNAPSHOT-standalone.jar [args]
+```
 
 ### Configuration
 
-Most of the configurable settings are available in the code. Good luck!
+Other configuration settings are available in the code. Good luck!
 
 ### References
 
@@ -31,7 +32,7 @@ Most of the configurable settings are available in the code. Good luck!
 
 ## License
 
-Copyright © 2022 FIXME
+Copyright © 2022 Sergey Polzunov
 
 This program and the accompanying materials are made available under the
 terms of the Eclipse Public License 2.0 which is available at
