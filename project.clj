@@ -10,5 +10,6 @@
   :main ^:skip-aot bgpbeat.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot [bgpbeat.core]
-                       :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}}
-  )
+                       :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}
+             :test {:resource-paths ["test/resources"]}}
+  :plugins [[lein-eftest "0.5.9"]])

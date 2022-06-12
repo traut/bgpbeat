@@ -2,7 +2,10 @@
   (:gen-class)
   (:require [clojure.core.async :as async]
             [clojure.string :as s]
-            [puget.printer :as puget]))
+
+            [cheshire.core :as cheshire]
+            [puget.printer :as puget]
+            ))
 
 (def logging-level :info)
 
@@ -19,6 +22,10 @@
 
 (defn chan-size [chan]
   (.count (.buf chan)))
+
+
+(defn parse-json [value]
+  (cheshire/parse-string value true))
 
 
 (defn log [level msg & {:as opts}]
