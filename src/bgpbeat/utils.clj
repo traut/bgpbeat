@@ -2,12 +2,13 @@
   (:gen-class)
   (:require [clojure.core.async :as async]
             [clojure.string :as s]
+            [clojure.java.io :as io]
 
             [cheshire.core :as cheshire]
             [puget.printer :as puget]
             ))
 
-(def logging-level :info)
+(def logging-level :debug)
 
 (def client-name "bgpbeat")
 
@@ -46,13 +47,14 @@
   of size `batch-size` or smaller if `max-time-msec` milliseconds passed,
   and push into `chan-out` channel."
   [chan-in chan-out max-time-secs batch-size]
-  (let [counter (dec batch-size)
+  (let [limit-1 (dec batch-size)
         max-time-msecs (* max-time-secs 1000)]
     (async/go-loop
       [buffer []
        timer (async/timeout max-time-msecs)]
       (let [[v p] (async/alts! [chan-in timer])]
         (cond
+          ; no new messages in the channel but timer channel returns
           (= p timer)
           (do
             (if (seq buffer)
@@ -60,17 +62,20 @@
               (log :debug "Empty buffer when a timeout reached" :max-time-secs max-time-secs))
             (recur [] (async/timeout max-time-msecs)))
 
+          ; input channel is closed, submit the stuff
           (nil? v)
           (when (seq buffer)
             (async/>! chan-out buffer))
 
-          (== (count buffer) counter)
+          ; buffer size reaches the max limit
+          (>= (count buffer) limit-1)
           (do
             (async/>! chan-out (conj buffer v))
             (recur [] (async/timeout max-time-msecs)))
 
-          :else
-          (recur (conj buffer v) timer))))))
+          :else (do
+                  (log :debug "Adding message to buffer" :buffer (count buffer))
+                  (recur (conj buffer v) timer)))))))
 
 
 (defn read-int-env-var [env-var-name default-value]
@@ -85,3 +90,10 @@
     stream
     (fn [i _] (log :info "Processing element" :count (inc i)))
     :step step))
+
+
+(defn stream-from-file [file-path callback]
+  (with-open [reader (io/reader file-path)]
+    (doseq [line (line-seq reader)]
+      (apply callback [(parse-json line)])))
+  (log :info "Streaming from file is done" :file file-path))
